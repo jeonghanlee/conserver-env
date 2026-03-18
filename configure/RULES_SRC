@@ -1,0 +1,40 @@
+.DEFAULT_GOAL := help
+
+.PHONY: help default init distclean deinit
+
+help:
+	$(info --------------------------------------- )
+	$(info Make Targets)
+	$(info --------------------------------------- )
+	$(QUIET) awk '/^[a-zA-Z\-_0-9]+:/ {            \
+	  nb = sub( /^## /, "", helpMsg );              \
+	  if(nb == 0) {                                 \
+	    helpMsg = $$0;                              \
+	    nb = sub( /^[^:]*:.* ## /, "", helpMsg );   \
+	  }                                             \
+	  if (nb)                                       \
+	    print  $$1 "\t" helpMsg;                    \
+	}                                               \
+	{ helpMsg = $$0 }'                              \
+	$(MAKEFILE_LIST) | column -ts:
+
+default: help
+
+## Clone Source
+init:
+	$(call gitclone2,$(SRC_GITURL),$(SRC_PATH),$(SRC_TAG))
+
+## Clean Source
+distclean:
+	$(call distclean, $(SRC_PATH))
+
+deinit: distclean
+
+.PHONY: build conf all
+
+build:
+	$(QUIET) $(MAKE) -C $(SRC_PATH)
+
+all: conf build install
+
+FORCE:

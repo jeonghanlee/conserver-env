@@ -1,0 +1,18 @@
+
+APPNAME:=conserver
+
+## Where the Source repository SRC_URL/SRC_NAME
+#
+SRC_URL:=https://github.com/bstansell
+SRC_NAME:=$(APPNAME)
+
+## Which the source tag / branch / hash id would like to use
+# 2026-02-02
+SRC_TAG:=v8.3.0
+
+# Placeholder for the site-specific version control
+SRC_VERSION:=$(SRC_TAG)
+
+
+-include $(TOP)/../RELEASE.local
+-include $(TOP)/configure/RELEASE.local

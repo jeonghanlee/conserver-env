@@ -1,0 +1,13 @@
+
+### $APPNAME installation location
+INSTALL_LOCATION=/usr/local
+
+#APPNAME_SITE_TMEPLATE_PATH=$(TOP)/site-template
+#SYSTEMD_PATH:=/etc/systemd/system
+#SYSTEMD_FILENAME:=$(APPNAME).service
+
+# These allow developers to override the CONFIG_SITE variable
+# settings without having to modify the configure/CONFIG_SITE
+# file itself.
+-include $(TOP)/../CONFIG_SITE.local
+-include $(TOP)/configure/CONFIG_SITE.local

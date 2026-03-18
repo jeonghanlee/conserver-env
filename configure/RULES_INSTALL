@@ -1,0 +1,38 @@
+.PHONY: install uninstall src_install src_uninstall src_clean
+
+install: src_install src_version
+
+uninstall: src_uninstall
+	$(QUIET) $(SUDO_CMD) rm -rf $(INSTALL_LOCATION)
+
+clean: src_clean
+
+ifeq ($(UNAME_S),Linux)
+conf:
+	cd $(SRC_PATH) && autoreconf -i -v -f && \
+	./configure --prefix="$(INSTALL_LOCATION)" \
+	            --with-openssl
+endif
+
+src_install:
+	$(QUIET) $(SUDO_CMD) $(MAKE) -C $(SRC_PATH) install
+
+src_uninstall:
+	$(QUIET) $(SUDO_CMD) $(MAKE) -C $(SRC_PATH) uninstall
+
+src_clean:
+	$(QUIET) $(MAKE) -C $(SRC_PATH) clean
+
+.PHONY: src_version src_version_clean
+
+src_version: FORCE
+	$(QUIET)echo "Timestamps : $$(date +%Y%m%d-%H%M%S)/YYYYMMDD-HHMMSS" > $(TOP)/.versions
+	$(QUIET)echo "- SRC REMOTE URL   : $(SRC_GITURL)"  >> $(TOP)/.versions
+	$(QUIET)echo "- SRC SITE VERSION : $(SRC_TAG)"     >> $(TOP)/.versions
+	$(QUIET)echo "- SRC GIT  VERSION : "               >> $(TOP)/.versions
+	$(QUIET)cd $(SRC_PATH) && git describe --tags      >> $(TOP)/.versions
+
+src_version_clean:
+	$(QUIET)rm -rf $(TOP)/.versions
+
+FORCE:
