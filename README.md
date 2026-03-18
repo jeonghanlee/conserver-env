@@ -2,12 +2,8 @@
 
 `conserver` build environment for Linux.
 
-* The source codes are located at <https://github.com/bstansell/conserver>
-
-## About
-
-This repository builds the `conserver` package consistently on Linux
-from a pinned source tag.
+* Source: <https://github.com/bstansell/conserver>
+* See [docs/ACCOUNT.md](docs/ACCOUNT.md) for service account setup.
 
 ## Prerequisites
 
@@ -21,7 +17,7 @@ sudo apt install autoconf automake gcc make libssl-dev
 
 ## Commands
 
-By default, everything installs under `/usr/local`. Override via:
+Default install path is `/opt/conserver`. Override via:
 
 ```bash
 echo "INSTALL_LOCATION=where...." > configure/CONFIG_SITE.local
@@ -35,7 +31,17 @@ make install
 ```
 
 ```bash
+make sd_useradd
+make sd_install
+make sd_enable
+make sd_start
+```
+
+```bash
+make sd_stop
+make sd_disable
+make sd_clean
+make sd_userdel
 make uninstall
-make clean
 make distclean
 ```

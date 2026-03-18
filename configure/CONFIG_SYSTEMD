@@ -1,0 +1,5 @@
+SYSTEMD_PATH:=/etc/systemd/system
+SYSTEMD_FILENAME:=conserver.service
+
+CONSERVER_USER:=conserver
+CONSERVER_GROUP:=conserver

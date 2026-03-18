@@ -1,0 +1,61 @@
+.PHONY: sd_install sd_status sd_start sd_stop sd_restart sd_enable sd_disable sd_clean
+
+CONSERVER_SITE_TEMPLATE_PATH:=$(TOP)/site-template
+
+ifeq ($(UNAME_S),Linux)
+
+sd_install: sd_conf
+	$(QUIET)$(SUDO_CMD) $(INSTALL_DATA) $(CONSERVER_SITE_TEMPLATE_PATH)/systemd/$(SYSTEMD_FILENAME) $(SYSTEMD_PATH)/
+	$(QUIET)$(SUDO_CMD) systemctl daemon-reload
+
+sd_conf: $(CONSERVER_SITE_TEMPLATE_PATH)/systemd/$(SYSTEMD_FILENAME).in
+	$(QUIET)printf ">>> Generate %s from %s\n" "$(SYSTEMD_FILENAME)" "$<"
+	$(QUIET)sed -e "s|@INSTALL_LOCATION@|$(INSTALL_LOCATION)|g" \
+	            -e "s|@DOCURL@|$(DOCURL)|g" \
+	            < $< > $(CONSERVER_SITE_TEMPLATE_PATH)/systemd/$(SYSTEMD_FILENAME)
+
+sd_conf.show:
+	$(QUIET)cat -b $(CONSERVER_SITE_TEMPLATE_PATH)/systemd/$(SYSTEMD_FILENAME)
+
+sd_install.show:
+	$(QUIET)cat -b $(SYSTEMD_PATH)/$(SYSTEMD_FILENAME)
+
+sd_useradd:
+	$(QUIET)printf ">>> Creating group and user: %s\n" "$(CONSERVER_GROUP)"
+	$(QUIET)getent group $(CONSERVER_GROUP) >/dev/null || $(SUDO_CMD) groupadd $(CONSERVER_GROUP)
+	$(QUIET)id -u $(CONSERVER_USER) >/dev/null 2>&1 || \
+	    $(SUDO_CMD) useradd -r -M -d /nonexistent -g $(CONSERVER_GROUP) \
+	              -s /sbin/nologin -c "conserver daemon account" $(CONSERVER_USER)
+
+sd_userdel:
+	$(QUIET)printf ">>> Removing user: %s\n" "$(CONSERVER_USER)"
+	$(QUIET)id -u $(CONSERVER_USER) >/dev/null 2>&1 && \
+	    $(SUDO_CMD) userdel $(CONSERVER_USER) || true
+	$(QUIET)getent group $(CONSERVER_GROUP) >/dev/null && \
+	    $(SUDO_CMD) groupdel $(CONSERVER_GROUP) || true
+
+sd_status:
+	$(QUIET)systemctl status -l $(SYSTEMD_FILENAME) | cat -b
+
+sd_start:
+	$(QUIET)$(SUDO_CMD) systemctl start $(SYSTEMD_FILENAME)
+
+sd_stop:
+	-$(QUIET)$(SUDO_CMD) systemctl stop $(SYSTEMD_FILENAME)
+
+sd_restart:
+	$(QUIET)$(SUDO_CMD) systemctl restart $(SYSTEMD_FILENAME)
+
+sd_enable:
+	$(if $(wildcard $(SYSTEMD_PATH)/$(SYSTEMD_FILENAME)), \
+	    $(QUIET)$(SUDO_CMD) systemctl enable $(SYSTEMD_FILENAME))
+
+sd_disable:
+	$(if $(wildcard $(SYSTEMD_PATH)/$(SYSTEMD_FILENAME)), \
+	    $(QUIET)$(SUDO_CMD) systemctl disable $(SYSTEMD_FILENAME))
+
+sd_clean:
+	$(if $(wildcard $(SYSTEMD_PATH)/$(SYSTEMD_FILENAME)), \
+	    $(QUIET)$(SUDO_CMD) rm -f $(SYSTEMD_PATH)/$(SYSTEMD_FILENAME))
+
+endif
