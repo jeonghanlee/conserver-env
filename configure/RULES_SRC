@@ -22,6 +22,17 @@ default: help
 
 ## Clone Source
 init:
+	@if [ -d "$(SRC_PATH)" ]; then \
+	    printf "Directory '%s' already exists.\n" "$(SRC_PATH)"; \
+	    printf "Remove and re-clone? [y/N]: "; \
+	    read confirm; \
+	    if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
+	        rm -rf "$(SRC_PATH)"; \
+	    else \
+	        printf "Aborted.\n"; \
+	        exit 0; \
+	    fi; \
+	fi
 	$(call gitclone2,$(SRC_GITURL),$(SRC_PATH),$(SRC_TAG))
 
 ## Clean Source

@@ -1,6 +1,6 @@
 
-### $APPNAME installation location
-INSTALL_LOCATION=/opt/$(APPNAME)
+### installation location
+INSTALL_LOCATION=/usr/local
 
 #APPNAME_SITE_TMEPLATE_PATH=$(TOP)/site-template
 #SYSTEMD_PATH:=/etc/systemd/system

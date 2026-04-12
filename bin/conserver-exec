@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# SSH forced-command wrapper for conserver access to EPICS IOC consoles.
+# Validates the requested IOC name against a strict allowlist pattern,
+# resolves the UDS socket path, and executes con in read-write mode.
+#
+# Deployed on each IOC server as the forced command for the conserver-svc account.
+# The conserver daemon on the central server invokes:
+#   ssh conserver-svc@<ioc-host> <ioc-name>
+# which triggers this script with SSH_ORIGINAL_COMMAND=<ioc-name>.
+
+set -e
+
+PROCSERV_RUN_DIR="/run/procserv"
+CON_BIN="/usr/local/bin/con"
+IOC_NAME_PATTERN='^[a-zA-Z0-9_-]+$'
+
+if [[ -z "${SSH_ORIGINAL_COMMAND}" ]]; then
+    printf "Error: No IOC name provided.\n" >&2
+    exit 1
+fi
+
+# Reject multi-word commands, pipes, redirects, semicolons
+ioc_name="${SSH_ORIGINAL_COMMAND}"
+
+if [[ "${ioc_name}" =~ [[:space:]\;\|\&\<\>\`\$\(\)] ]]; then
+    printf "Error: Invalid characters in request.\n" >&2
+    exit 1
+fi
+
+if [[ ! "${ioc_name}" =~ ${IOC_NAME_PATTERN} ]]; then
+    printf "Error: Invalid IOC name: %s\n" "${ioc_name}" >&2
+    exit 1
+fi
+
+sock_path="${PROCSERV_RUN_DIR}/${ioc_name}/control"
+
+if [[ ! -S "${sock_path}" ]]; then
+    printf "Error: Socket not found: %s\n" "${sock_path}" >&2
+    exit 1
+fi
+
+if [[ ! -x "${CON_BIN}" ]]; then
+    printf "Error: con binary not found: %s\n" "${CON_BIN}" >&2
+    exit 1
+fi
+
+exec "${CON_BIN}" -c "${sock_path}"

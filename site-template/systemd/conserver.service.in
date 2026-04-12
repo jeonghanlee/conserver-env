@@ -1,18 +1,26 @@
 [Unit]
 Description=conserver - Multi-user IOC console server
-After=network.target
+After=network-online.target nss-lookup.target time-sync.target
+Wants=network-online.target
+ConditionPathExists=@INSTALL_LOCATION@/etc/conserver.cf
 
 [Service]
 Type=forking
 User=conserver
 Group=conserver
 
-# Grant permission to bind privileged ports (< 1024)
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-
-# Systemd dynamically creates /run/conserver with proper ownership
 RuntimeDirectory=conserver
 PIDFile=/run/conserver/conserver.pid
+
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ReadWritePaths=/run/conserver /var/log/conserver
+ReadOnlyPaths=@INSTALL_LOCATION@/etc/conserver.cf
+
+LimitNOFILE=4096
+MemoryMax=256M
 
 ExecStart=@INSTALL_LOCATION@/sbin/conserver -d -C @INSTALL_LOCATION@/etc/conserver.cf
 ExecReload=/bin/kill -HUP $MAINPID

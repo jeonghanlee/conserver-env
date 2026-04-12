@@ -1,0 +1,28 @@
+.PHONY: node_useradd node_userdel node_install node_uninstall
+
+ifeq ($(UNAME_S),Linux)
+
+node_useradd:
+	$(QUIET)printf ">>> Creating node account: %s (group: %s)\n" "$(NODE_USER)" "$(NODE_GROUP)"
+	$(QUIET)getent group $(NODE_GROUP) >/dev/null || \
+	    { printf "Error: Group '%s' does not exist. Deploy ioc-runner first.\n" "$(NODE_GROUP)" >&2; exit 1; }
+	$(QUIET)id -u $(NODE_USER) >/dev/null 2>&1 || \
+	    $(SUDO_CMD) useradd -r -M -d /nonexistent -g $(NODE_GROUP) \
+	              -s /sbin/nologin -c "conserver SSH exec target" $(NODE_USER)
+
+node_userdel:
+	$(QUIET)printf ">>> Removing node account: %s\n" "$(NODE_USER)"
+	$(QUIET)id -u $(NODE_USER) >/dev/null 2>&1 && \
+	    $(SUDO_CMD) userdel $(NODE_USER) || true
+
+node_install:
+	$(QUIET)printf ">>> Installing %s to %s\n" "$(NODE_EXEC_SCRIPT)" "$(NODE_EXEC_INSTALL_DIR)"
+	$(QUIET)test -f $(TOP)/bin/$(NODE_EXEC_SCRIPT) || \
+	    { printf "Error: %s not found in bin/\n" "$(NODE_EXEC_SCRIPT)" >&2; exit 1; }
+	$(QUIET)$(SUDO_CMD) $(INSTALL_755) $(TOP)/bin/$(NODE_EXEC_SCRIPT) $(NODE_EXEC_INSTALL_DIR)/$(NODE_EXEC_SCRIPT)
+
+node_uninstall:
+	$(QUIET)printf ">>> Removing %s from %s\n" "$(NODE_EXEC_SCRIPT)" "$(NODE_EXEC_INSTALL_DIR)"
+	$(QUIET)$(SUDO_CMD) rm -f $(NODE_EXEC_INSTALL_DIR)/$(NODE_EXEC_SCRIPT)
+
+endif

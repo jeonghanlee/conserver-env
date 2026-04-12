@@ -1,0 +1,4 @@
+NODE_USER:=conserver-svc
+NODE_GROUP:=ioc
+NODE_EXEC_SCRIPT:=conserver-exec
+NODE_EXEC_INSTALL_DIR:=/usr/local/bin

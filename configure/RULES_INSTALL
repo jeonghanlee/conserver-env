@@ -3,7 +3,6 @@
 install: src_install src_version
 
 uninstall: src_uninstall
-	$(QUIET) $(SUDO_CMD) rm -rf $(INSTALL_LOCATION_APPNAME)
 
 clean: src_clean
 
@@ -12,8 +11,10 @@ conf:
 	find $(SRC_PATH) -exec touch {} +
 	cd $(SRC_PATH) && autoreconf -i -v -f && \
 	./configure --prefix="$(INSTALL_LOCATION)" \
-	            --with-pidfile=/var/run/conserver.pid \
-	            --with-openssl
+ 	            --with-pidfile=/var/run/conserver.pid \
+	            --with-openssl \
+	            --with-uds=/run/conserver \
+	            --with-trust-uds-cred
 endif
 
 src_install:
