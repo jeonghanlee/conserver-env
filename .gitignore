@@ -5,3 +5,4 @@
 work/
 build/
 /site-template/etc/conserver.cf
+/HANDOFF.md
