@@ -37,6 +37,13 @@ make sd_enable
 make sd_start
 ```
 
+Configuration deploy and apply (5-stage workflow, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)):
+
+```bash
+make cf_deploy        # cf_check + cf_install
+make cf_apply         # cf_check_installed + cf_reload
+```
+
 ```bash
 make sd_stop
 make sd_disable

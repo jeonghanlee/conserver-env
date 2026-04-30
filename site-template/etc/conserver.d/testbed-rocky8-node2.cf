@@ -1,0 +1,16 @@
+# IOC consoles on testbed-rocky8-node2
+
+console testioc4 {
+    include epics-ioc;
+    exec ssh -i /etc/conserver/id_ed25519 -o StrictHostKeyChecking=yes -o BatchMode=yes conserver-svc@testbed-rocky8-node2 testioc4;
+}
+
+console testioc5 {
+    include epics-ioc;
+    exec ssh -i /etc/conserver/id_ed25519 -o StrictHostKeyChecking=yes -o BatchMode=yes conserver-svc@testbed-rocky8-node2 testioc5;
+}
+
+console testioc6 {
+    include epics-ioc;
+    exec ssh -i /etc/conserver/id_ed25519 -o StrictHostKeyChecking=yes -o BatchMode=yes conserver-svc@testbed-rocky8-node2 testioc6;
+}

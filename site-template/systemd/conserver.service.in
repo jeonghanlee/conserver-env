@@ -12,11 +12,13 @@ Group=conserver
 RuntimeDirectory=conserver
 PIDFile=/run/conserver/conserver.pid
 
+LogsDirectory=conserver
+LogsDirectoryMode=0750
+
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 NoNewPrivileges=yes
-ReadWritePaths=/run/conserver /var/log/conserver
 ReadOnlyPaths=@INSTALL_LOCATION@/etc/conserver.cf
 
 LimitNOFILE=4096

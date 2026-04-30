@@ -2,3 +2,6 @@
 *-src
 .versions
 *.service
+work/
+build/
+/site-template/etc/conserver.cf

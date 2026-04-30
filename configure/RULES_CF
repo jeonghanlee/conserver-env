@@ -1,0 +1,62 @@
+.PHONY: cf_conf cf_conf.show cf_check cf_install cf_install.show cf_check_installed cf_reload cf_deploy cf_apply cf_clean
+
+ifeq ($(UNAME_S),Linux)
+
+## Render conserver.cf.in -> conserver.cf with @INSTALL_LOCATION@ substituted
+cf_conf: $(CF_SITE_TEMPLATE_PATH)/$(CF_FILENAME).in
+	$(QUIET) printf ">>> Generate %s from %s\n" "$(CF_FILENAME)" "$<"
+	$(QUIET) sed -e "s|@INSTALL_LOCATION@|$(INSTALL_LOCATION)|g" \
+	    < $< > $(CF_SITE_TEMPLATE_PATH)/$(CF_FILENAME)
+
+cf_conf.show:
+	$(QUIET) cat -b $(CF_SITE_TEMPLATE_PATH)/$(CF_FILENAME)
+
+## Stage 2 -- render to staging dir and run conserver -S
+cf_check: $(CF_SITE_TEMPLATE_PATH)/$(CF_FILENAME).in
+	$(QUIET) mkdir -p $(CF_STAGING_DIR)/conserver.d
+	$(QUIET) sed -e "s|@INSTALL_LOCATION@|$(TOP)/build|g" \
+	    < $< > $(CF_STAGING_DIR)/$(CF_FILENAME)
+	$(QUIET) cp $(CF_SITE_TEMPLATE_PATH)/conserver.d/*.cf $(CF_STAGING_DIR)/conserver.d/
+	$(QUIET) $(INSTALL_LOCATION)/sbin/conserver -S -C $(CF_STAGING_DIR)/$(CF_FILENAME)
+
+## Stage 3 -- install conserver.cf and conserver.d/ to $(CF_INSTALL_DIR)
+cf_install: cf_conf
+	$(QUIET) $(SUDO_CMD) install -d -m 0755 -o root -g $(CONSERVER_GROUP) $(CF_INSTALL_DIR)/conserver.d
+	$(QUIET) manifest=$(CF_INSTALL_DIR)/conserver.d/.cf_install.manifest; \
+	    if [ -f "$$manifest" ]; then \
+	        while IFS= read -r f; do \
+	            $(SUDO_CMD) rm -f "$(CF_INSTALL_DIR)/conserver.d/$$f"; \
+	        done < "$$manifest"; \
+	        $(SUDO_CMD) rm -f "$$manifest"; \
+	    fi
+	$(QUIET) $(SUDO_CMD) $(INSTALL) -m 0640 -o root -g $(CONSERVER_GROUP) \
+	    $(CF_SITE_TEMPLATE_PATH)/$(CF_FILENAME) $(CF_INSTALL_DIR)/$(CF_FILENAME)
+	$(QUIET) for f in $(CF_SITE_TEMPLATE_PATH)/conserver.d/*.cf; do \
+	    $(SUDO_CMD) $(INSTALL) -m 0640 -o root -g $(CONSERVER_GROUP) \
+	        "$$f" $(CF_INSTALL_DIR)/conserver.d/; \
+	done
+	$(QUIET) (cd $(CF_SITE_TEMPLATE_PATH)/conserver.d && ls *.cf) | \
+	    $(SUDO_CMD) tee $(CF_INSTALL_DIR)/conserver.d/.cf_install.manifest > /dev/null
+
+cf_install.show:
+	$(QUIET) cat -b $(CF_INSTALL_DIR)/$(CF_FILENAME)
+	$(QUIET) ls -la $(CF_INSTALL_DIR)/conserver.d/
+
+## Stage 4 -- syntax check the installed conserver.cf
+cf_check_installed:
+	$(QUIET) $(INSTALL_LOCATION)/sbin/conserver -S -C $(CF_INSTALL_DIR)/$(CF_FILENAME)
+
+## Stage 5 -- SIGHUP conserver to reload configuration
+cf_reload:
+	$(QUIET) $(SUDO_CMD) systemctl reload $(SYSTEMD_FILENAME)
+
+## Group -- cf_check then cf_install (validate then deploy to system)
+cf_deploy: cf_check cf_install
+
+## Group -- cf_check_installed then cf_reload (verify installed then SIGHUP)
+cf_apply: cf_check_installed cf_reload
+
+cf_clean:
+	$(QUIET) rm -rf $(CF_STAGING_DIR)
+
+endif

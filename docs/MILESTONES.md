@@ -10,6 +10,10 @@
 - [x] Compile-time options table and rebuild conditions
 - [x] systemd unit hardening (security isolation, resource limits, dependencies)
 - [x] Makefile infrastructure (CONFIG_DEPLOY, RULES_DEPLOY, CONFIG, RULES)
+- [x] Inventory model: split-per-node `#include`, git-managed (no scraping)
+- [x] `conserver.cf.in` template + `@INSTALL_LOCATION@` rendering
+- [x] CONFIG_CF + RULES_CF — 5-stage cf workflow + `cf_deploy`/`cf_apply` groups
+- [x] Test inventory committed: `testbed-rocky8-node{1,2}.cf` (3 IOCs each)
 
 ## M2. Build
 
@@ -24,14 +28,13 @@
 - [x] `make sd_useradd` — conserver account created
 - [x] `make sd_conf && make sd_conf.show` — unit file verified
 - [x] `make sd_install` — unit deployed to /etc/systemd/system
-- [ ] `bin/generate-conserver-cf` script written
-- [ ] Parses `/etc/procServ.d/*.conf` and extracts IOC_PORT UDS path
-- [ ] Node inventory collection method finalized (SSH pull or NFS)
-- [ ] Generates valid `conserver.cf` with config, access, default, console blocks
-- [ ] `/var/log/conserver/` directory created with proper ownership
-- [ ] `conserver -t -C /usr/local/etc/conserver.cf` validation passes
+- [x] `LogsDirectory=conserver` — systemd auto-creates `/var/log/conserver` 0750
+- [x] `make cf_conf` — `conserver.cf.in` -> `conserver.cf` rendering
+- [ ] `make cf_deploy` (cf_check + cf_install) on testbed
 - [ ] `make sd_enable`
 - [ ] `make sd_start` — conserver daemon running on UDS /run/conserver
+- [ ] `make cf_apply` (cf_check_installed + cf_reload)
+- [ ] `task s` block design: `subst` for console name + host substitution
 
 ## M4. Node Setup
 
@@ -58,6 +61,6 @@
 ## M7. Production Rollout
 
 - [ ] `conserver-svc` + `conserver-exec` deployed to all production nodes
-- [ ] `conserver.cf` generated for full IOC inventory
-- [ ] conserver daemon reloaded with production configuration
+- [ ] Site inventory authored in site git repo (cf.in + per-node cf files)
+- [ ] `make cf_deploy && make cf_apply` against production cf
 - [ ] Operations documentation finalized

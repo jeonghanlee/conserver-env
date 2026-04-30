@@ -9,10 +9,10 @@ nodes, without modifying the existing `ioc-runner` deployment model.
 
 **Terminology:**
 
-| Term       | Description                                              |
-|------------|----------------------------------------------------------|
-| **server** | Central server running the conserver daemon + `console`  |
-| **node**   | IOC server running procServ + ioc-runner + con           |
+| Term              | Description                                              |
+|-------------------|----------------------------------------------------------|
+| **server**        | Central server running the conserver daemon + `console`  |
+| **node** (IOC server) | Host running procServ + ioc-runner + con             |
 
 ---
 
@@ -41,7 +41,7 @@ nodes, without modifying the existing `ioc-runner` deployment model.
   - conserver daemon (1 instance)
   - console command (conserver client)
   - SSH key: /etc/conserver/id_ed25519
-  - bin/generate-conserver-cf
+  - cf inventory: /usr/local/etc/conserver.cf + conserver.d/<vm-name>.cf
      |
      | type exec + SSH (key-based, BatchMode)
      | ssh conserver-svc@<node> <ioc-name>
@@ -82,7 +82,7 @@ It serves as the execution target for `conserver-exec`. Direct local access
 via `ioc-runner attach` continues to work unchanged.
 
 **One conserver daemon manages all nodes.**
-All IOC console entries are registered in a single `/etc/conserver.cf` on the
+All IOC console entries are registered in a single `/usr/local/etc/conserver.cf` on the
 server. Adding or removing IOCs requires only a config regeneration and
 a `SIGHUP` to conserver — no restart needed.
 
@@ -181,17 +181,29 @@ intervenes before the OOM killer acts indiscriminately.
 
 ## 6. conserver.cf Structure
 
+The configuration is split across one main file plus one file per node,
+linked via the conserver `#include` directive (manpage `conserver.cf(5)`,
+column 0, max 10 levels of nesting):
+
 ```
-/etc/conserver.cf
+/usr/local/etc/conserver.cf                       (main: globals + #include lines)
   |
   |-- config *          global settings (UDS path, logfile, daemonmode)
   |-- access *          trusted hosts, allowed users
-  |-- default epics-ioc shared IOC defaults (rw/ro, logfile, timestamp)
-  |-- console <name>    one block per IOC (type exec, SSH command)
+  |-- default epics-ioc shared IOC defaults (master, type, rw/ro, logfile, timestamp)
+  |-- #include /usr/local/etc/conserver.d/<vm-name>.cf  (one per node)
   |-- task s            on-demand IOC status (systemctl + UDS connection count)
+
+/usr/local/etc/conserver.d/<vm-name>.cf           (per-node: console blocks)
+  |
+  |-- console <ioc-name> { include epics-ioc; exec ssh ... ; }   (one per IOC)
+  |-- ...
 ```
 
-### config block
+The main file is rendered from a template (`site-template/etc/conserver.cf.in`)
+with `@INSTALL_LOCATION@` substituted. Per-node files are committed as-is.
+
+### config block (main)
 
 ```
 config * {
@@ -205,7 +217,7 @@ The `primaryport` directive is omitted. conserver is compiled with
 `--with-uds=/run/conserver`, so client-daemon communication uses the
 UNIX domain socket exclusively. No TCP listener is created.
 
-### default block
+### default block (main)
 
 ```
 default epics-ioc {
@@ -214,59 +226,65 @@ default epics-ioc {
     logfile /var/log/conserver/&.log;
     timestamp 1h;
     options !hupcl;
+    master localhost;
+    type exec;
 }
 ```
 
-### console block (one per IOC)
+`master` and `type` are pushed into the default block so each per-node
+console block only carries the unique `exec` SSH command.
+
+### console block (one per IOC, in per-node file)
 
 ```
 console <ioc-name> {
-    master localhost;
     include epics-ioc;
-    type exec;
-    exec ssh -i /etc/conserver/id_ed25519 \
-             -o StrictHostKeyChecking=yes \
-             -o BatchMode=yes \
-             conserver-svc@<node> <ioc-name>;
+    exec ssh -i /etc/conserver/id_ed25519 -o StrictHostKeyChecking=yes -o BatchMode=yes conserver-svc@<vm-name> <ioc-name>;
 }
 ```
 
 The SSH command passes only the IOC name. The `conserver-exec` wrapper on the
 node validates and resolves the full UDS path.
 
-### task block (on-demand status)
+### task block (main)
 
-```
-task s {
-    cmd ssh -i /etc/conserver/id_ed25519 \
-            -o BatchMode=yes \
-            conserver-svc@<node> \
-            "systemctl is-active epics-@<ioc-name>.service && \
-             ss -lx /run/procserv/<ioc-name>/control 2>/dev/null | \
-             awk 'NR>1 {print \"connections:\", \$3}'";
-    description IOC service status and UDS connection count;
-    confirm no;
-}
-```
+The status task uses the conserver `subst` directive to substitute the
+console name (`c`) and host (`h`) values at invocation time. The exact
+`subst` design is pending; see MILESTONES for the open item.
 
 ---
 
 ## 7. IOC Inventory Source
 
-conserver.cf is generated from the existing `ioc-runner` configuration files.
-No separate inventory is maintained.
+The IOC inventory is maintained as version-controlled config files in the
+git repository, not generated from `/etc/procServ.d/` scraping. Each node
+gets one file under `site-template/etc/conserver.d/<vm-name>.cf` containing
+that node's console blocks.
 
 ```
-/etc/procServ.d/<ioc-name>.conf
+git repository (this conserver-env repo or a downstream site repo)
   |
-  |-- IOC_PORT  -->  unix:ioc-srv:ioc:0660:/run/procserv/<ioc-name>/control
-                                                          ^
-                                                          UDS path extracted here
+  |-- site-template/etc/conserver.cf.in              (main, with @INSTALL_LOCATION@)
+  |-- site-template/etc/conserver.d/<vm-name>.cf     (per-node console blocks)
 ```
 
-The `IOC_PORT` field written by `ioc-runner install` contains the full UDS path
-as the last colon-delimited field. The `generate-conserver-cf` script on the
-server parses this field to resolve each IOC's socket path.
+Workflow:
+
+```
+1. Operator edits cf.in or per-node files in repo (git branch + PR)
+2. `make cf_deploy`   -- syntax check (-S in staging) + install to /usr/local/etc/
+3. `make cf_apply`    -- syntax check installed copy + systemctl reload (SIGHUP)
+```
+
+Adding/removing a node = adding/removing one file under `conserver.d/` and
+updating the corresponding `#include` line in `conserver.cf.in`. Adding/
+removing IOCs on an existing node = editing that node's per-node file.
+git history records every change.
+
+The site-specific production inventory lives in the site's internal git
+repository. This `conserver-env` repository carries a test inventory
+(`testbed-rocky8-node1.cf`, `testbed-rocky8-node2.cf`) for cloud-provision
+integration testing.
 
 ---
 
@@ -292,82 +310,122 @@ Each node
 ```
 conserver-env/
 ├── bin/
-│   ├── conserver-exec            # Deployed to each node
-│   └── generate-conserver-cf     # Runs on server
+│   └── conserver-exec                       # Deployed to each node
 ├── configure/
 │   ├── RELEASE
 │   ├── CONFIG, CONFIG_SITE, CONFIG_VARS, CONFIG_SRC
-│   ├── CONFIG_SYSTEMD
+│   ├── CONFIG_SYSTEMD                       # conserver/conserver-svc account vars
+│   ├── CONFIG_DEPLOY                        # node-side install vars
+│   ├── CONFIG_CF                            # conserver.cf path/staging vars
 │   ├── RULES, RULES_FUNC, RULES_PATCH, RULES_SRC
-│   ├── RULES_INSTALL             # conserver build targets
-│   ├── RULES_SYSTEMD             # server daemon targets (sd_*)
-│   └── RULES_DEPLOY              # server/node deployment targets
+│   ├── RULES_INSTALL                        # conserver build targets
+│   ├── RULES_SYSTEMD                        # server daemon targets (sd_*)
+│   ├── RULES_DEPLOY                         # node deployment targets (node_*)
+│   ├── RULES_CF                             # cf install/check/reload targets (cf_*)
+│   └── RULES_VARS
 ├── site-template/
-│   └── conserver.service.in
+│   ├── systemd/
+│   │   ├── conserver.service.in             # Templated systemd unit
+│   │   └── conserver.service                # Rendered output
+│   └── etc/
+│       ├── conserver.cf.in                  # Templated main cf
+│       ├── conserver.cf                     # Rendered output
+│       └── conserver.d/
+│           ├── testbed-rocky8-node1.cf      # Test inventory: per-node IOCs
+│           └── testbed-rocky8-node2.cf
 └── docs/
     ├── ACCOUNT.md
-    └── ARCHITECTURE.md
+    ├── ARCHITECTURE.md
+    └── MILESTONES.md
 ```
 
 ### Makefile Targets
 
-| Scope      | Target            | Description                                    |
-|------------|-------------------|------------------------------------------------|
-| Build      | `make init`       | Clone conserver source                         |
-| Build      | `make conf`       | Configure with OpenSSL                         |
-| Build      | `make build`      | Compile conserver                              |
-| Build      | `make install`    | Install to `/opt/conserver`                    |
-| Server     | `make sd_useradd` | Create `conserver` system account              |
-| Server     | `make sd_install` | Deploy systemd unit + daemon-reload            |
-| Server     | `make sd_enable`  | Enable conserver on boot                       |
-| Server     | `make sd_start`   | Start conserver daemon                         |
-| Node       | `make node_useradd`   | Create `conserver-svc` account (ioc group) |
-| Node       | `make node_install`   | Deploy `conserver-exec` to `/usr/local/bin`|
-| Node       | `make node_uninstall` | Remove `conserver-exec`                    |
-| Node       | `make node_userdel`   | Remove `conserver-svc` account             |
+| Scope      | Target                      | Description                                                       |
+|------------|-----------------------------|-------------------------------------------------------------------|
+| Build      | `make init`                 | Clone conserver source                                            |
+| Build      | `make conf`                 | Configure with OpenSSL + UDS                                      |
+| Build      | `make build`                | Compile conserver                                                 |
+| Build      | `make install`              | Install to `$(INSTALL_LOCATION)`                                  |
+| Server     | `make sd_useradd`           | Create `conserver` system account                                 |
+| Server     | `make sd_install`           | Deploy systemd unit + daemon-reload                               |
+| Server     | `make sd_enable`            | Enable conserver on boot                                          |
+| Server     | `make sd_start`             | Start conserver daemon                                            |
+| Node       | `make node_useradd`         | Create `conserver-svc` account (ioc group)                        |
+| Node       | `make node_install`         | Deploy `conserver-exec` to `/usr/local/bin`                       |
+| Node       | `make node_uninstall`       | Remove `conserver-exec`                                           |
+| Node       | `make node_userdel`         | Remove `conserver-svc` account                                    |
+| Config     | `make cf_conf`              | Render `conserver.cf.in` -> `conserver.cf`                        |
+| Config     | `make cf_check`             | Stage 2 -- staging render + `conserver -S` syntax check           |
+| Config     | `make cf_install`           | Stage 3 -- install cf and conserver.d/ to `$(INSTALL_LOCATION)/etc/` |
+| Config     | `make cf_check_installed`   | Stage 4 -- syntax check the installed cf                          |
+| Config     | `make cf_reload`            | Stage 5 -- `systemctl reload conserver` (SIGHUP)                  |
+| Config     | `make cf_deploy`            | Group: `cf_check` then `cf_install`                               |
+| Config     | `make cf_apply`             | Group: `cf_check_installed` then `cf_reload`                      |
 
 ---
 
 ## 10. conserver.cf Lifecycle
 
+The 5-stage operator workflow is exposed through `cf_*` Makefile targets.
+Stages 2 and 3 are bundled by `cf_deploy`; stages 4 and 5 by `cf_apply`.
+
 ```
-IOC added    -->  ioc-runner install <name>.conf   (on node)
-                  -->  /etc/procServ.d/<name>.conf written
+Stage 1. Manual edit                                      (no make target)
+         - Operator edits site-template/etc/conserver.cf.in
+           or site-template/etc/conserver.d/<vm-name>.cf
+         - git commit + push (audit trail)
 
-Config regen -->  generate-conserver-cf            (on server)
-                  -->  /etc/conserver.cf.new
+Stage 2. Syntax check                                     make cf_check
+         - Render cf.in to $(TOP)/build/etc/ with #include
+           paths pointing to the staging dir
+         - Copy per-node files to staging
+         - conserver -S -C build/etc/conserver.cf
 
-Validate     -->  conserver -t -C /etc/conserver.cf.new
+Stage 3. Install                                          make cf_install
+         - cf_conf renders cf.in with INSTALL_LOCATION
+         - Manifest-based stale cleanup of /usr/local/etc/conserver.d/
+         - Install rendered cf and per-node files (root:conserver, 0640)
+         - Write new manifest of installed per-node files
 
-Apply        -->  mv /etc/conserver.cf.new /etc/conserver.cf
-                  kill -HUP $(pidof conserver)     (no restart required)
+Stage 4. Production syntax check                          make cf_check_installed
+         - conserver -S -C /usr/local/etc/conserver.cf
+
+Stage 5. Reload                                           make cf_reload
+         - systemctl reload conserver  (= SIGHUP via ExecReload)
+         - Daemon re-reads cf without restart;
+           existing console sessions unaffected
 ```
+
+`make cf_deploy` runs stages 2 and 3 in order. `make cf_apply` runs stages
+4 and 5 in order. If `cf_check` fails, `cf_install` is not executed; if
+`cf_check_installed` fails, `cf_reload` is not executed.
 
 ---
 
 ## 11. Deployment Phases
 
 ```
-Phase 1. Local test environment
-         - 2x VMs (Debian 13 or Rocky 8.10)
-         - alsu-rocky8-gui-test : server (conserver)
-         - alsu-rocky8-test     : node (procServ + ioc-runner + con)
+Phase 1. Local test environment (cloud-provision)
+         - 1 server + 2 node VMs per OS, naming testbed-<os>-{server,node1,node2}
+         - testbed-rocky8-server : server (conserver)
+         - testbed-rocky8-node1, node2 : nodes (procServ + ioc-runner + con)
 
-Phase 2. Node setup
-         - make node_useradd     (create conserver-svc on node)
-         - make node_install     (deploy conserver-exec on node)
+Phase 2. Node setup (on each node VM)
+         - make node_useradd     (create conserver-svc, member of ioc group)
+         - make node_install     (deploy conserver-exec to /usr/local/bin)
 
 Phase 3. SSH key setup
-         - Generate key on server
-         - Deploy public key to conserver-svc authorized_keys on node
-         - Verify: ssh conserver-svc@<node> <ioc-name>
+         - Generate key on server (conserver:conserver, mode 0600)
+         - Deploy public key to conserver-svc authorized_keys on each node
+         - Verify: ssh conserver-svc@<vm-name> <ioc-name>
 
-Phase 4. Server setup
+Phase 4. Server setup (on server VM)
          - make init && make conf && make build && make install
          - make sd_useradd && make sd_install && make sd_enable
-         - generate-conserver-cf
-         - conserver -t
+         - make cf_deploy        (cf_check + cf_install)
          - make sd_start
+         - make cf_apply         (cf_check_installed + cf_reload)
 
 Phase 5. Validation
          - console <ioc-name>    attach from server
@@ -376,9 +434,9 @@ Phase 5. Validation
          - Two concurrent sessions on same IOC
 
 Phase 6. Production rollout
-         - Deploy conserver-svc + conserver-exec to all nodes
-         - Regenerate conserver.cf for full IOC inventory
-         - Validate and reload
+         - Deploy conserver-svc + conserver-exec to all production nodes
+         - Author site inventory (cf.in + per-node cf files) in site git repo
+         - make cf_deploy && make cf_apply
 ```
 
 ---
@@ -394,8 +452,10 @@ Phase 6. Production rollout
 [ ] SSH public key deployed to node authorized_keys
 [ ] SSH exec verified: ssh conserver-svc@<node> <ioc-name>
 [ ] conserver built and installed on server
-[ ] conserver.cf generated and validated: conserver -t
+[ ] cf authored in repo (cf.in + conserver.d/<vm-name>.cf)
+[ ] make cf_deploy passes (cf_check + cf_install)
 [ ] conserver daemon started: systemctl start conserver
+[ ] make cf_apply passes (cf_check_installed + cf_reload)
 [ ] console <ioc-name> attaches from server
 [ ] ^Ec!s returns systemctl status and connection count
 [ ] Two concurrent console sessions verified

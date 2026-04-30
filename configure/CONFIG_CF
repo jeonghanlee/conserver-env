@@ -1,0 +1,4 @@
+CF_SITE_TEMPLATE_PATH := $(TOP)/site-template/etc
+CF_STAGING_DIR        := $(TOP)/build/etc
+CF_INSTALL_DIR        := $(INSTALL_LOCATION)/etc
+CF_FILENAME           := conserver.cf

@@ -1,0 +1,36 @@
+# conserver master configuration (template)
+#
+# Rendered by `make cf_conf` into conserver.cf with @INSTALL_LOCATION@
+# substituted from configure/CONFIG_SITE.
+#
+# Test inventory for cloud-provision testbed (Rocky 8.10).
+# Topology: 1 server (testbed-rocky8-server) + 2 nodes (testbed-rocky8-node1, node2).
+# Each node hosts 3 IOCs (testioc1..3 on node1, testioc4..6 on node2).
+#
+# The site-specific production inventory lives outside this repository.
+# This file is the test fixture exercised by cloud-provision integration tests.
+
+config * {
+    defaultaccess allowed;
+    logfile /var/log/conserver/conserver.log;
+    daemonmode yes;
+}
+
+access * {
+    trusted 127.0.0.1;
+    allowed 127.0.0.1;
+}
+
+default epics-ioc {
+    rw @ioc;
+    ro *;
+    logfile /var/log/conserver/&.log;
+    timestamp 1h;
+    options !hupcl;
+    master localhost;
+    type exec;
+}
+
+# Per-node console blocks (#include must start at column 0)
+#include @INSTALL_LOCATION@/etc/conserver.d/testbed-rocky8-node1.cf
+#include @INSTALL_LOCATION@/etc/conserver.d/testbed-rocky8-node2.cf

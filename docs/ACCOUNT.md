@@ -136,52 +136,44 @@ sudo -u conserver ssh -i /etc/conserver/id_ed25519 \
 
 ---
 
-## 3. conserver.cf Generator and Reload Workflow
+## 3. conserver.cf Authoring and Reload Workflow
 
-### 3.1. Generator Location
+### 3.1. Inventory Authoring
 
-The `conserver.cf` generator resides in the `conserver-env` repository
-alongside the conserver build and deployment infrastructure. It parses
-IOC configuration files (`/etc/procServ.d/*.conf`) collected from all
-nodes to produce a complete `conserver.cf`.
+The conserver inventory is maintained as version-controlled files in a
+git repository. There is no scraping of `/etc/procServ.d/` from nodes.
+The repository carries:
 
-### 3.2. IOC Configuration Collection
+- `site-template/etc/conserver.cf.in` -- main file (template, with `@INSTALL_LOCATION@`)
+- `site-template/etc/conserver.d/<vm-name>.cf` -- one file per node, listing
+  that node's IOC console blocks
 
-The generator requires access to every node's `/etc/procServ.d/`
-directory. Two collection methods:
+Adding/removing a node = adding/removing one file under `conserver.d/` plus
+the corresponding `#include` line in `conserver.cf.in`. Adding/removing IOCs
+on a node = editing that node's per-node file. Every change is captured by
+git history.
 
-**Method A — SSH pull (recommended):**
+The site-specific production inventory lives in the site's internal git
+repository. The `conserver-env` repository carries a test inventory
+(`testbed-rocky8-node1.cf`, `testbed-rocky8-node2.cf`) for cloud-provision
+integration testing.
 
-```bash
-for host in proton electron kaon; do
-    scp -i /etc/conserver/id_ed25519 \
-        conserver-svc@${host}:/etc/procServ.d/*.conf \
-        /etc/conserver/inventory/${host}/
-done
-```
+### 3.2. Reload Workflow
 
-**Method B — Shared filesystem (NFS):**
-
-If `/etc/procServ.d/` is already on a shared mount, no collection step
-is needed.
-
-### 3.3. Reload Workflow
-
-After `ioc-runner install` or `ioc-runner remove` on any node,
-an operator regenerates and applies the conserver configuration from
-the server:
+After any cf change in the repository, the operator deploys and applies
+from the server using the `cf_*` Makefile targets:
 
 ```bash
-# 1. Collect current IOC configurations
-generate-conserver-cf
+# Stages 2+3: syntax check + install to /usr/local/etc/
+make cf_deploy
 
-# 2. Validate
-/opt/conserver/sbin/conserver -t -C /etc/conserver.cf.new
-
-# 3. Apply (no daemon restart required)
-sudo mv /etc/conserver.cf.new /etc/conserver.cf
-sudo kill -HUP $(pidof conserver)
+# Stages 4+5: syntax check installed cf + systemctl reload (SIGHUP)
+make cf_apply
 ```
+
+If `cf_check` fails, `cf_install` is not executed. If `cf_check_installed`
+fails, `cf_reload` is not executed. Existing console sessions are
+unaffected by SIGHUP -- the daemon re-reads cf without restart.
 
 This is a manual, operator-driven process. The `ioc-runner` utility has
 no dependency on or awareness of conserver.
