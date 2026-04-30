@@ -248,9 +248,27 @@ node validates and resolves the full UDS path.
 
 ### task block (main)
 
-The status task uses the conserver `subst` directive to substitute the
-console name (`c`) and host (`h`) values at invocation time. The exact
-`subst` design is pending; see MILESTONES for the open item.
+The status task is defined once in the main file and reused across all
+consoles via the `subst` directive. Two placeholder characters are
+chosen so they never collide with the literal cmd: `~` for the host
+(`h`) value and `^` for the console name (`c`) value. The format
+suffix `s` is required for string substitutions
+(`conserver.cf(5)` line 565).
+
+```
+task s {
+    cmd ssh -i /etc/conserver/id_ed25519 -o BatchMode=yes conserver-svc@~ systemctl is-active epics-@^.service;
+    subst ~=hs,^=cs;
+    description IOC service status;
+    confirm no;
+}
+```
+
+Each console block must declare `host <vm-name>;` so the `h`
+substitution can resolve. Triggered by `^Ec!s` from any console
+session, the cmd renders with that session's `c` and `h` values and
+the resulting SSH call queries the matching IOC service on the matching
+node.
 
 ---
 

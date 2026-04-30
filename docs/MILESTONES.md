@@ -34,7 +34,7 @@
 - [ ] `make sd_enable`
 - [ ] `make sd_start` — conserver daemon running on UDS /run/conserver
 - [ ] `make cf_apply` (cf_check_installed + cf_reload)
-- [ ] `task s` block design: `subst` for console name + host substitution
+- [x] `task s` block design: `subst ~=hs,^=cs`, `host` directive added to each console block, `make cf_check` passes
 
 ## M4. Node Setup
 

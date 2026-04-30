@@ -34,3 +34,14 @@ default epics-ioc {
 # Per-node console blocks (#include must start at column 0)
 #include @INSTALL_LOCATION@/etc/conserver.d/testbed-rocky8-node1.cf
 #include @INSTALL_LOCATION@/etc/conserver.d/testbed-rocky8-node2.cf
+
+# On-demand IOC status (^Ec!s from a console session).
+# subst placeholders: ~ -> host directive (h), ^ -> console name (c).
+# Both chars are picked because they do not appear in the literal cmd.
+# Format suffix `s` is required for string replacements (manpage line 565).
+task s {
+    cmd ssh -i /etc/conserver/id_ed25519 -o BatchMode=yes conserver-svc@~ systemctl is-active epics-@^.service;
+    subst ~=hs,^=cs;
+    description IOC service status;
+    confirm no;
+}
