@@ -8,9 +8,7 @@ clean: src_clean
 
 ifeq ($(UNAME_S),Linux)
 conf:
-	find $(SRC_PATH) -exec touch {} +
-	cd $(SRC_PATH) && autoreconf -i -v -f && \
-	./configure --prefix="$(INSTALL_LOCATION)" \
+	cd $(SRC_PATH) && ./configure --prefix="$(INSTALL_LOCATION)" \
  	            --with-pidfile=/var/run/conserver.pid \
 	            --with-openssl \
 	            --with-uds=/run/conserver \
@@ -30,10 +28,9 @@ src_clean:
 
 src_version: FORCE
 	$(QUIET)echo "Timestamps : $$(date +%Y%m%d-%H%M%S)/YYYYMMDD-HHMMSS" > $(TOP)/.versions
-	$(QUIET)echo "- SRC REMOTE URL   : $(SRC_GITURL)"  >> $(TOP)/.versions
+	$(QUIET)echo "- SRC REMOTE URL   : $(SRC_DIST_URL)" >> $(TOP)/.versions
 	$(QUIET)echo "- SRC SITE VERSION : $(SRC_TAG)"     >> $(TOP)/.versions
-	$(QUIET)echo "- SRC GIT  VERSION : "               >> $(TOP)/.versions
-	$(QUIET)cd $(SRC_PATH) && git describe --tags      >> $(TOP)/.versions
+	$(QUIET)echo "- SRC DIST VERSION : $(SRC_RELEASE_VERSION)" >> $(TOP)/.versions
 
 src_version_clean:
 	$(QUIET)rm -rf $(TOP)/.versions

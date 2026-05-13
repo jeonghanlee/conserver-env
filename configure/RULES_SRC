@@ -20,11 +20,11 @@ help:
 
 default: help
 
-## Clone Source
+## Fetch Source
 init:
 	@if [ -d "$(SRC_PATH)" ]; then \
 	    printf "Directory '%s' already exists.\n" "$(SRC_PATH)"; \
-	    printf "Remove and re-clone? [y/N]: "; \
+	    printf "Remove and re-fetch? [y/N]: "; \
 	    read confirm; \
 	    if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
 	        rm -rf "$(SRC_PATH)"; \
@@ -33,7 +33,11 @@ init:
 	        exit 0; \
 	    fi; \
 	fi
-	$(call gitclone2,$(SRC_GITURL),$(SRC_PATH),$(SRC_TAG))
+	$(QUIET) rm -rf "$(SRC_DIST_DIR)" "$(SRC_DIST_FILE)"
+	$(QUIET) wget -O "$(SRC_DIST_FILE)" "$(SRC_DIST_URL)"
+	$(QUIET) tar --warning=no-unknown-keyword --exclude='._*' -xzf "$(SRC_DIST_FILE)"
+	$(QUIET) mv "$(SRC_DIST_DIR)" "$(SRC_PATH)"
+	$(QUIET) rm -f "$(SRC_DIST_FILE)"
 
 ## Clean Source
 distclean:

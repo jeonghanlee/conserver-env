@@ -9,15 +9,15 @@
 
 ```bash
 # Rocky Linux 8
-sudo dnf install autoconf automake gcc make openssl-devel
+sudo dnf install gcc make openssl-devel tar wget
 
 # Debian / Ubuntu
-sudo apt install autoconf automake gcc make libssl-dev
+sudo apt install gcc make libssl-dev tar wget
 ```
 
 ## Commands
 
-Default install path is `/opt/conserver`. Override via:
+Default install path is `/usr/local`. Override via:
 
 ```bash
 echo "INSTALL_LOCATION=where...." > configure/CONFIG_SITE.local
